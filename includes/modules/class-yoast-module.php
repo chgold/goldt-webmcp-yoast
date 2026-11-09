@@ -155,9 +155,63 @@ class Yoast_Module extends Module_Base {
 		return $id;
 	}
 
+	/**
+	 * Per-object permission ceiling (SEC-00): the same rule Yoast's own post
+	 * metabox uses — the user must be able to edit this specific post.
+	 *
+	 * @param int $id Post ID.
+	 * @return \WP_Error|null
+	 */
+	private function require_edit_post( $id ) {
+		if ( ! \current_user_can( 'edit_post', $id ) ) {
+			return new \WP_Error( 'forbidden', 'edit_post capability required for this post', array( 'status' => 403 ) );
+		}
+		return null;
+	}
+
+	/**
+	 * Yoast's "advanced" metabox tab (robots, canonical) is only editable with
+	 * `wpseo_edit_advanced_metadata`, unless the site turned the
+	 * `disableadvanced_meta` security setting off (WPSEO_Metabox / WPSEO_Meta).
+	 *
+	 * @return \WP_Error|null
+	 */
+	private function require_advanced_meta() {
+		$can = class_exists( '\WPSEO_Capability_Utils' )
+			? \WPSEO_Capability_Utils::current_user_can( 'wpseo_edit_advanced_metadata' )
+			: \current_user_can( 'wpseo_edit_advanced_metadata' ); // phpcs:ignore WordPress.WP.Capabilities.Unknown -- Yoast-registered capability.
+		$disabled = class_exists( '\WPSEO_Options' ) ? \WPSEO_Options::get( 'disableadvanced_meta' ) : true;
+		if ( ! $can && $disabled ) {
+			return new \WP_Error( 'forbidden', 'wpseo_edit_advanced_metadata capability required', array( 'status' => 403 ) );
+		}
+		return null;
+	}
+
+	/**
+	 * Whether the current user may see an indexable object natively.
+	 *
+	 * @param string $type post | term | user.
+	 * @param int    $id   Object ID.
+	 * @return bool
+	 */
+	private function can_edit_object( $type, $id ) {
+		switch ( $type ) {
+			case 'post':
+				return \current_user_can( 'edit_post', $id );
+			case 'term':
+				return \current_user_can( 'edit_term', $id );
+			case 'user':
+				return \current_user_can( 'edit_user', $id );
+		}
+		return \current_user_can( 'manage_options' );
+	}
+
 	public function execute_getSeoMeta( $params ) {
-		$deny = $this->require_cap( 'edit_posts' ); if ( $deny ) return $deny;
 		$id = $this->require_post( $params ); if ( \is_wp_error( $id ) ) return $id;
+		$deny = $this->require_edit_post( $id );
+		if ( $deny ) {
+			return $deny;
+		}
 		return $this->success_response( array(
 			'post_id'   => $id,
 			'seo_title' => \get_post_meta( $id, '_yoast_wpseo_title', true ),
@@ -168,28 +222,40 @@ class Yoast_Module extends Module_Base {
 	}
 
 	public function execute_getFocusKeyword( $params ) {
-		$deny = $this->require_cap( 'edit_posts' ); if ( $deny ) return $deny;
 		$id = $this->require_post( $params ); if ( \is_wp_error( $id ) ) return $id;
+		$deny = $this->require_edit_post( $id );
+		if ( $deny ) {
+			return $deny;
+		}
 		return $this->success_response( array( 'post_id' => $id, 'focus_keyword' => \get_post_meta( $id, '_yoast_wpseo_focuskw', true ) ) );
 	}
 
 	public function execute_getSeoScore( $params ) {
-		$deny = $this->require_cap( 'edit_posts' ); if ( $deny ) return $deny;
 		$id = $this->require_post( $params ); if ( \is_wp_error( $id ) ) return $id;
+		$deny = $this->require_edit_post( $id );
+		if ( $deny ) {
+			return $deny;
+		}
 		$score = \get_post_meta( $id, '_yoast_wpseo_linkdex', true );
 		return $this->success_response( array( 'post_id' => $id, 'seo_score' => $score === '' ? null : (int) $score ) );
 	}
 
 	public function execute_getReadabilityScore( $params ) {
-		$deny = $this->require_cap( 'edit_posts' ); if ( $deny ) return $deny;
 		$id = $this->require_post( $params ); if ( \is_wp_error( $id ) ) return $id;
+		$deny = $this->require_edit_post( $id );
+		if ( $deny ) {
+			return $deny;
+		}
 		$score = \get_post_meta( $id, '_yoast_wpseo_content_score', true );
 		return $this->success_response( array( 'post_id' => $id, 'readability_score' => $score === '' ? null : (int) $score ) );
 	}
 
 	public function execute_getRobotsSettings( $params ) {
-		$deny = $this->require_cap( 'edit_posts' ); if ( $deny ) return $deny;
 		$id = $this->require_post( $params ); if ( \is_wp_error( $id ) ) return $id;
+		$deny = $this->require_edit_post( $id );
+		if ( $deny ) {
+			return $deny;
+		}
 		return $this->success_response( array(
 			'post_id'  => $id,
 			'noindex'  => \get_post_meta( $id, '_yoast_wpseo_meta-robots-noindex', true ) === '1',
@@ -198,8 +264,11 @@ class Yoast_Module extends Module_Base {
 	}
 
 	public function execute_getSocialMeta( $params ) {
-		$deny = $this->require_cap( 'edit_posts' ); if ( $deny ) return $deny;
 		$id = $this->require_post( $params ); if ( \is_wp_error( $id ) ) return $id;
+		$deny = $this->require_edit_post( $id );
+		if ( $deny ) {
+			return $deny;
+		}
 		return $this->success_response( array(
 			'post_id'          => $id,
 			'og_title'         => \get_post_meta( $id, '_yoast_wpseo_opengraph-title', true ),
@@ -213,14 +282,32 @@ class Yoast_Module extends Module_Base {
 	public function execute_listCornerstoneContent( $params ) {
 		$deny = $this->require_cap( 'edit_posts' ); if ( $deny ) return $deny;
 		$limit = \absint( $params['limit'] ?? 50 ) ?: 50;
-		$posts = \get_posts( array(
-			'post_type'  => 'any', 'numberposts' => $limit, 'post_status' => 'any',
-			'meta_key'   => '_yoast_wpseo_is_cornerstone', 'meta_value' => '1',
-		) );
-		$out = array();
-		foreach ( $posts as $p ) {
-			$out[] = array( 'post_id' => (int) $p->ID, 'title' => \get_the_title( $p ), 'type' => $p->post_type );
-		}
+		$out  = array();
+		$page = 1;
+		// SEC-00: only posts the user can edit natively (Yoast metabox rule).
+		do {
+			$posts = \get_posts(
+				array(
+					'post_type'   => 'any',
+					'numberposts' => $limit,
+					'paged'       => $page,
+					'post_status' => 'any',
+					'meta_key'    => '_yoast_wpseo_is_cornerstone', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- unchanged query, now paged.
+					'meta_value'  => '1', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				)
+			);
+			foreach ( $posts as $p ) {
+				if ( ! \current_user_can( 'edit_post', $p->ID ) ) {
+					continue;
+				}
+				$out[] = array( 'post_id' => (int) $p->ID, 'title' => \get_the_title( $p ), 'type' => $p->post_type );
+				if ( count( $out ) >= $limit ) {
+					break 2;
+				}
+			}
+			++$page;
+			$fetched = count( $posts );
+		} while ( $fetched === $limit && $page <= 20 );
 		return $this->success_response( array( 'cornerstone' => $out, 'count' => count( $out ) ) );
 	}
 
@@ -235,14 +322,31 @@ class Yoast_Module extends Module_Base {
 		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
 			return new \WP_Error( 'no_index', 'Yoast indexable table not found', array( 'status' => 501 ) );
 		}
-		$rows = $wpdb->get_results( $wpdb->prepare(
-			"SELECT object_id, title, primary_focus_keyword, primary_focus_keyword_score, readability_score, permalink
-			 FROM {$table}
-			 WHERE object_type = %s AND primary_focus_keyword_score BETWEEN %d AND %d
-			 ORDER BY primary_focus_keyword_score ASC LIMIT %d",
-			$type, $min, $max, $limit
-		), ARRAY_A );
-		return $this->success_response( array( 'results' => $rows ?: array(), 'count' => is_array( $rows ) ? count( $rows ) : 0 ) );
+		$out    = array();
+		$offset = 0;
+		// SEC-00: drop indexables whose object the user cannot edit natively.
+		do {
+			$rows = $wpdb->get_results( $wpdb->prepare(
+				"SELECT object_id, title, primary_focus_keyword, primary_focus_keyword_score, readability_score, permalink
+				 FROM {$table}
+				 WHERE object_type = %s AND primary_focus_keyword_score BETWEEN %d AND %d
+				 ORDER BY primary_focus_keyword_score ASC, id ASC LIMIT %d OFFSET %d",
+				$type, $min, $max, $limit, $offset
+			), ARRAY_A );
+			$rows = is_array( $rows ) ? $rows : array();
+			foreach ( $rows as $row ) {
+				if ( ! $this->can_edit_object( $type, (int) $row['object_id'] ) ) {
+					continue;
+				}
+				$out[] = $row;
+				if ( count( $out ) >= $limit ) {
+					break 2;
+				}
+			}
+			$offset += $limit;
+			$fetched = count( $rows );
+		} while ( $fetched === $limit && $offset < $limit * 20 );
+		return $this->success_response( array( 'results' => $out, 'count' => count( $out ) ) );
 	}
 
 	public function execute_getSitemapSettings( $params ) {
@@ -284,8 +388,11 @@ class Yoast_Module extends Module_Base {
 	}
 
 	public function execute_updateSeoMeta( $params ) {
-		$deny = $this->require_cap( 'edit_others_posts' ); if ( $deny ) return $deny;
 		$id = $this->require_post( $params ); if ( \is_wp_error( $id ) ) return $id;
+		$deny = $this->require_edit_post( $id );
+		if ( $deny ) {
+			return $deny;
+		}
 		$updated = array();
 		if ( isset( $params['title'] ) ) {
 			\update_post_meta( $id, '_yoast_wpseo_title', \sanitize_text_field( $params['title'] ) );
@@ -302,22 +409,39 @@ class Yoast_Module extends Module_Base {
 	}
 
 	public function execute_setFocusKeyword( $params ) {
-		$deny = $this->require_cap( 'edit_others_posts' ); if ( $deny ) return $deny;
 		$id = $this->require_post( $params ); if ( \is_wp_error( $id ) ) return $id;
+		$deny = $this->require_edit_post( $id );
+		if ( $deny ) {
+			return $deny;
+		}
 		\update_post_meta( $id, '_yoast_wpseo_focuskw', \sanitize_text_field( $params['keyword'] ?? '' ) );
 		return $this->success_response( array( 'post_id' => $id, 'focus_keyword' => $params['keyword'] ?? '' ) );
 	}
 
 	public function execute_setCanonical( $params ) {
-		$deny = $this->require_cap( 'edit_others_posts' ); if ( $deny ) return $deny;
 		$id = $this->require_post( $params ); if ( \is_wp_error( $id ) ) return $id;
+		$deny = $this->require_edit_post( $id );
+		if ( $deny ) {
+			return $deny;
+		}
+		$deny = $this->require_advanced_meta();
+		if ( $deny ) {
+			return $deny;
+		}
 		\update_post_meta( $id, '_yoast_wpseo_canonical', \esc_url_raw( $params['canonical'] ?? '' ) );
 		return $this->success_response( array( 'post_id' => $id, 'canonical' => $params['canonical'] ?? '' ) );
 	}
 
 	public function execute_setRobotsSettings( $params ) {
-		$deny = $this->require_cap( 'edit_others_posts' ); if ( $deny ) return $deny;
 		$id = $this->require_post( $params ); if ( \is_wp_error( $id ) ) return $id;
+		$deny = $this->require_edit_post( $id );
+		if ( $deny ) {
+			return $deny;
+		}
+		$deny = $this->require_advanced_meta();
+		if ( $deny ) {
+			return $deny;
+		}
 		if ( isset( $params['noindex'] ) ) {
 			\update_post_meta( $id, '_yoast_wpseo_meta-robots-noindex', ! empty( $params['noindex'] ) ? '1' : '2' );
 		}
@@ -328,15 +452,21 @@ class Yoast_Module extends Module_Base {
 	}
 
 	public function execute_setCornerstone( $params ) {
-		$deny = $this->require_cap( 'edit_others_posts' ); if ( $deny ) return $deny;
 		$id = $this->require_post( $params ); if ( \is_wp_error( $id ) ) return $id;
+		$deny = $this->require_edit_post( $id );
+		if ( $deny ) {
+			return $deny;
+		}
 		\update_post_meta( $id, '_yoast_wpseo_is_cornerstone', ! empty( $params['cornerstone'] ) ? '1' : '' );
 		return $this->success_response( array( 'post_id' => $id, 'cornerstone' => ! empty( $params['cornerstone'] ) ) );
 	}
 
 	public function execute_setSocialMeta( $params ) {
-		$deny = $this->require_cap( 'edit_others_posts' ); if ( $deny ) return $deny;
 		$id = $this->require_post( $params ); if ( \is_wp_error( $id ) ) return $id;
+		$deny = $this->require_edit_post( $id );
+		if ( $deny ) {
+			return $deny;
+		}
 		$map = array(
 			'og_title' => '_yoast_wpseo_opengraph-title',
 			'og_description' => '_yoast_wpseo_opengraph-description',
