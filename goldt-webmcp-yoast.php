@@ -3,7 +3,7 @@
  * Plugin Name: Goldnat for Yoast SEO
  * Plugin URI: https://goldnat.ai/plugins/goldt-webmcp-yoast
  * Description: Yoast SEO integration for Goldnat — exposes SEO metadata, focus keywords, readability/SEO scores, robots directives, social meta and cornerstone content as AI tools via the Goldnat WebMCP Bridge.
- * Version: 1.0.1
+ * Version: 1.1.0
  * Author: chgold
  * Author URI: https://goldnat.ai/
  * License: Proprietary
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'GOLDTWMCP_YOAST_VERSION', '1.0.1' );
+define( 'GOLDTWMCP_YOAST_VERSION', '1.1.0' );
 define( 'GOLDTWMCP_YOAST_PATH', plugin_dir_path( __FILE__ ) );
 
 /**
@@ -68,6 +68,7 @@ add_action(
  * @return void
  */
 function goldtwmcp_yoast_register_modules( $goldtwmcp ) {
+	require_once GOLDTWMCP_YOAST_PATH . 'includes/modules/trait-yoast-insights.php';
 	require_once GOLDTWMCP_YOAST_PATH . 'includes/modules/class-yoast-module.php';
 	$manifest = $goldtwmcp->get_manifest_instance();
 	$module   = new \GoldtWebMCP\Modules\Yoast_Module( $manifest );

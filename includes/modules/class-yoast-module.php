@@ -16,6 +16,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Yoast_Module extends Module_Base {
 
+	use Yoast_Insights;
+
 	/**
 	 * Module name — the tool-name prefix in the manifest.
 	 *
@@ -281,6 +283,9 @@ class Yoast_Module extends Module_Base {
 				'required_scope' => 'write',
 			)
 		);
+
+		// ── Insight reads (free, 1.1.0) ──
+		$this->register_insight_tools();
 	}
 
 	/**

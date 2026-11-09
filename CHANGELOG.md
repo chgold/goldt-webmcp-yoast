@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 — 2026-11-09
+
+- New (free, read): `yoast.searchContent` — search the Yoast index by SEO rank, readability rank, score ranges, focus keyphrase, post type/status, cornerstone/noindex flags and publish-date range (only content the user can edit).
+- New (free, read): `yoast.getSchema` — the Schema.org JSON-LD graph Yoast outputs for a post, optionally filtered by @type.
+- New (free, read): `yoast.getSocialPreview` — effective Open Graph + Twitter/X card values as rendered (templates and fallbacks included), which fields are custom-set, and improvement hints.
+- New (free, read): `yoast.getBreadcrumbs` — breadcrumb trail, BreadcrumbList schema piece and breadcrumb settings.
+- New (free, read): `yoast.getIndexationStatus` — indexables indexing progress, unindexed count, link-count completeness, noindexed post types and explicitly noindexed content.
+- Per-post tools require `edit_post` on the post; search/status tools require `edit_posts` and filter results per object (SEC-00). Data is read through Yoast's Meta surface and Indexable repository, not raw postmeta.
+
 ## 1.0.1 — 2026-11-09
 
 - Security: permission ceiling (SEC-00) — per-post reads and all writes now use per-post `edit_post` (Yoast's own metabox rule) instead of global `edit_posts` / `edit_others_posts`; Authors can now edit SEO of their own posts but not others'. setCanonical / setRobotsSettings additionally require Yoast's advanced-metadata permission (`wpseo_edit_advanced_metadata` unless `disableadvanced_meta` is off). listCornerstoneContent and searchBySeoScore omit objects the user cannot edit.
