@@ -350,7 +350,13 @@ class Yoast_Module extends Module_Base {
 	}
 
 	public function execute_getSitemapSettings( $params ) {
-		$deny = $this->require_cap( 'edit_posts' ); if ( $deny ) return $deny;
+		// SEC-00: Yoast's settings screens (incl. XML sitemaps) require wpseo_manage_options.
+		$can = class_exists( '\WPSEO_Capability_Utils' )
+			? \WPSEO_Capability_Utils::current_user_can( 'wpseo_manage_options' )
+			: \current_user_can( 'wpseo_manage_options' ); // phpcs:ignore WordPress.WP.Capabilities.Unknown -- Yoast-registered capability.
+		if ( ! $can ) {
+			return new \WP_Error( 'forbidden', 'wpseo_manage_options capability required', array( 'status' => 403 ) );
+		}
 		$enabled = true;
 		if ( class_exists( '\WPSEO_Options' ) ) {
 			$enabled = (bool) \WPSEO_Options::get( 'enable_xml_sitemap', true );
@@ -368,6 +374,12 @@ class Yoast_Module extends Module_Base {
 		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
 			return new \WP_Error( 'no_index', 'Yoast indexable table not found', array( 'status' => 501 ) );
 		}
+		// SEC-00: Yoast's dashboard SEO overview (WPSEO_Statistics) is shown to
+		// edit_posts users but scoped to their own posts without edit_others_posts.
+		$scope = '';
+		if ( ! \current_user_can( 'edit_others_posts' ) ) {
+			$scope = $wpdb->prepare( " WHERE object_type = 'post' AND author_id = %d", \get_current_user_id() );
+		}
 		$row = $wpdb->get_row(
 			"SELECT
 			  SUM(object_type='post') AS posts_indexed,
@@ -375,7 +387,7 @@ class Yoast_Module extends Module_Base {
 			  SUM(is_robots_noindex=1) AS noindex,
 			  SUM(description IS NULL OR description='') AS missing_description,
 			  SUM(primary_focus_keyword_score < 50 AND primary_focus_keyword_score IS NOT NULL) AS low_seo_score
-			 FROM {$table}",
+			 FROM {$table}{$scope}",
 			ARRAY_A
 		);
 		return $this->success_response( array(
