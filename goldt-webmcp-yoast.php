@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Goldnat for Yoast SEO
  * Plugin URI: https://goldnat.ai/plugins/goldt-webmcp-yoast
- * Description: Yoast SEO integration for Goldnat — exposes SEO metadata, focus keywords, readability/SEO scores, robots directives, social meta and cornerstone content as AI tools via the Goldnat WebMCP Bridge.
- * Version: 1.1.0
+ * Description: Yoast SEO integration for Goldnat — read-only AI tools for SEO metadata, focus keyphrases, readability/SEO scores, robots, social previews, schema, breadcrumbs, cornerstone content and index health via the Goldnat WebMCP Bridge. Editing tools are in Goldnat for Yoast SEO Pro.
+ * Version: 1.2.0
  * Author: chgold
  * Author URI: https://goldnat.ai/
  * License: Proprietary
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'GOLDTWMCP_YOAST_VERSION', '1.1.0' );
+define( 'GOLDTWMCP_YOAST_VERSION', '1.2.0' );
 define( 'GOLDTWMCP_YOAST_PATH', plugin_dir_path( __FILE__ ) );
 
 /**

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.0 — 2026-11-09
+
+- Breaking: write tools moved to Goldnat for Yoast SEO Pro (`goldt-webmcp-yoast-pro`, PM slug `yoast-ai-connect-pro`) — `yoast.updateSeoMeta`, `yoast.setFocusKeyword`, `yoast.setCanonical`, `yoast.setRobotsSettings`, `yoast.setCornerstone`, `yoast.setSocialMeta`. Install the Pro plugin to keep them; the tool names are unchanged.
+- The free add-on is now read-only (15 tools, all `read` scope), per Coverage v1.2 (no write/delete in Free).
+- `yoast.searchBySeoScore` and `yoast.getSeoOverview` read Yoast's index through Yoast's Indexable repository instead of direct SQL (numbers are returned as integers).
+- Added readme.txt.
+
 ## 1.1.0 — 2026-11-09
 
 - New (free, read): `yoast.searchContent` — search the Yoast index by SEO rank, readability rank, score ranges, focus keyphrase, post type/status, cornerstone/noindex flags and publish-date range (only content the user can edit).

@@ -1,6 +1,9 @@
 <?php
 /**
- * Yoast SEO module — exposes Yoast SEO metadata as AI tools.
+ * Yoast SEO module — exposes Yoast SEO metadata as read-only AI tools.
+ *
+ * Write tools (updateSeoMeta, setFocusKeyword, setCanonical, setRobotsSettings,
+ * setCornerstone, setSocialMeta) moved to Goldnat for Yoast SEO Pro in 1.2.0.
  *
  * @package GoldtWebMCP\Yoast
  */
@@ -12,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Yoast SEO tools module (`yoast.*`).
+ * Yoast SEO read tools module (`yoast.*`, free edition).
  */
 class Yoast_Module extends Module_Base {
 
@@ -184,106 +187,6 @@ class Yoast_Module extends Module_Base {
 			)
 		);
 
-		// ── Writes (pro) ──
-		$this->register_tool(
-			'updateSeoMeta',
-			array(
-				'description'    => 'Update the SEO title and/or meta description of a post.',
-				'input_schema'   => array(
-					'type'       => 'object',
-					'required'   => array( 'post_id' ),
-					'properties' => array(
-						'post_id'  => array( 'type' => 'integer' ),
-						'title'    => array(
-							'type'        => 'string',
-							'description' => 'SEO title (may use Yoast %%variables%%)',
-						),
-						'metadesc' => array( 'type' => 'string' ),
-					),
-				),
-				'required_scope' => 'write',
-			)
-		);
-		$this->register_tool(
-			'setFocusKeyword',
-			array(
-				'description'    => 'Set the primary focus keyword of a post.',
-				'input_schema'   => array(
-					'type'       => 'object',
-					'required'   => array( 'post_id', 'keyword' ),
-					'properties' => array(
-						'post_id' => array( 'type' => 'integer' ),
-						'keyword' => array( 'type' => 'string' ),
-					),
-				),
-				'required_scope' => 'write',
-			)
-		);
-		$this->register_tool(
-			'setCanonical',
-			array(
-				'description'    => 'Set the canonical URL of a post.',
-				'input_schema'   => array(
-					'type'       => 'object',
-					'required'   => array( 'post_id', 'canonical' ),
-					'properties' => array(
-						'post_id'   => array( 'type' => 'integer' ),
-						'canonical' => array( 'type' => 'string' ),
-					),
-				),
-				'required_scope' => 'write',
-			)
-		);
-		$this->register_tool(
-			'setRobotsSettings',
-			array(
-				'description'    => 'Set robots directives (noindex/nofollow) of a post.',
-				'input_schema'   => array(
-					'type'       => 'object',
-					'required'   => array( 'post_id' ),
-					'properties' => array(
-						'post_id'  => array( 'type' => 'integer' ),
-						'noindex'  => array( 'type' => 'boolean' ),
-						'nofollow' => array( 'type' => 'boolean' ),
-					),
-				),
-				'required_scope' => 'write',
-			)
-		);
-		$this->register_tool(
-			'setCornerstone',
-			array(
-				'description'    => 'Flag/unflag a post as cornerstone content.',
-				'input_schema'   => array(
-					'type'       => 'object',
-					'required'   => array( 'post_id', 'cornerstone' ),
-					'properties' => array(
-						'post_id'     => array( 'type' => 'integer' ),
-						'cornerstone' => array( 'type' => 'boolean' ),
-					),
-				),
-				'required_scope' => 'write',
-			)
-		);
-		$this->register_tool(
-			'setSocialMeta',
-			array(
-				'description'    => 'Set OpenGraph + Twitter social metadata of a post.',
-				'input_schema'   => array(
-					'type'       => 'object',
-					'required'   => array( 'post_id' ),
-					'properties' => array(
-						'post_id'             => array( 'type' => 'integer' ),
-						'og_title'            => array( 'type' => 'string' ),
-						'og_description'      => array( 'type' => 'string' ),
-						'twitter_title'       => array( 'type' => 'string' ),
-						'twitter_description' => array( 'type' => 'string' ),
-					),
-				),
-				'required_scope' => 'write',
-			)
-		);
-
 		// ── Insight reads (free, 1.1.0) ──
 		$this->register_insight_tools();
 	}
@@ -337,24 +240,6 @@ class Yoast_Module extends Module_Base {
 	private function require_edit_post( $id ) {
 		if ( ! \current_user_can( 'edit_post', $id ) ) {
 			return new \WP_Error( 'forbidden', 'edit_post capability required for this post', array( 'status' => 403 ) );
-		}
-		return null;
-	}
-
-	/**
-	 * Yoast's "advanced" metabox tab (robots, canonical) is only editable with
-	 * `wpseo_edit_advanced_metadata`, unless the site turned the
-	 * `disableadvanced_meta` security setting off (WPSEO_Metabox / WPSEO_Meta).
-	 *
-	 * @return \WP_Error|null
-	 */
-	private function require_advanced_meta() {
-		$can      = class_exists( '\WPSEO_Capability_Utils' )
-			? \WPSEO_Capability_Utils::current_user_can( 'wpseo_edit_advanced_metadata' )
-			: \current_user_can( 'wpseo_edit_advanced_metadata' ); // phpcs:ignore WordPress.WP.Capabilities.Unknown -- Yoast-registered capability.
-		$disabled = class_exists( '\WPSEO_Options' ) ? \WPSEO_Options::get( 'disableadvanced_meta' ) : true;
-		if ( ! $can && $disabled ) {
-			return new \WP_Error( 'forbidden', 'wpseo_edit_advanced_metadata capability required', array( 'status' => 403 ) );
 		}
 		return null;
 	}
@@ -587,40 +472,40 @@ class Yoast_Module extends Module_Base {
 		if ( $deny ) {
 			return $deny;
 		}
-		global $wpdb;
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Yoast's own {prefix}yoast_indexable table has no WP API; live data is required; $table is $wpdb->prefix + a constant and every value goes through $wpdb->prepare().
-		$min   = isset( $params['min_score'] ) ? (int) $params['min_score'] : 0;
-		$max   = isset( $params['max_score'] ) ? (int) $params['max_score'] : 100;
-		$type  = \sanitize_key( $params['object_type'] ?? 'post' );
-		$limit = $this->limit_param( $params, 50 );
-		$table = $wpdb->prefix . 'yoast_indexable';
-		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
-			return new \WP_Error( 'no_index', 'Yoast indexable table not found', array( 'status' => 501 ) );
+		$repo = $this->indexable_repository();
+		if ( ! $repo ) {
+			return new \WP_Error( 'no_index', 'Yoast indexable repository not available', array( 'status' => 501 ) );
 		}
+		$min    = isset( $params['min_score'] ) ? (int) $params['min_score'] : 0;
+		$max    = isset( $params['max_score'] ) ? (int) $params['max_score'] : 100;
+		$type   = \sanitize_key( $params['object_type'] ?? 'post' );
+		$limit  = $this->limit_param( $params, 50 );
 		$out    = array();
 		$offset = 0;
 		// SEC-00: drop indexables whose object the user cannot edit natively.
 		do {
-			$rows = $wpdb->get_results(
-				$wpdb->prepare(
-					"SELECT object_id, title, primary_focus_keyword, primary_focus_keyword_score, readability_score, permalink
-				 FROM {$table}
-				 WHERE object_type = %s AND primary_focus_keyword_score BETWEEN %d AND %d
-				 ORDER BY primary_focus_keyword_score ASC, id ASC LIMIT %d OFFSET %d",
-					$type,
-					$min,
-					$max,
-					$limit,
-					$offset
-				),
-				ARRAY_A
-			);
+			$rows = $repo->query()
+				->where( 'object_type', $type )
+				->where_gte( 'primary_focus_keyword_score', $min )
+				->where_lte( 'primary_focus_keyword_score', $max )
+				->order_by_asc( 'primary_focus_keyword_score' )
+				->order_by_asc( 'id' )
+				->limit( $limit )
+				->offset( $offset )
+				->find_many();
 			$rows = is_array( $rows ) ? $rows : array();
 			foreach ( $rows as $row ) {
-				if ( ! $this->can_edit_object( $type, (int) $row['object_id'] ) ) {
+				if ( ! $this->can_edit_object( $type, (int) $row->object_id ) ) {
 					continue;
 				}
-				$out[] = $row;
+				$out[] = array(
+					'object_id'                   => (int) $row->object_id,
+					'title'                       => $row->title,
+					'primary_focus_keyword'       => $row->primary_focus_keyword,
+					'primary_focus_keyword_score' => null === $row->primary_focus_keyword_score ? null : (int) $row->primary_focus_keyword_score,
+					'readability_score'           => null === $row->readability_score ? null : (int) $row->readability_score,
+					'permalink'                   => $row->permalink,
+				);
 				if ( count( $out ) >= $limit ) {
 					break 2;
 				}
@@ -628,7 +513,6 @@ class Yoast_Module extends Module_Base {
 			$offset += $limit;
 			$fetched = count( $rows );
 		} while ( $fetched === $limit && $offset < $limit * 20 );
-		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		return $this->success_response(
 			array(
 				'results' => $out,
@@ -674,220 +558,27 @@ class Yoast_Module extends Module_Base {
 		if ( $deny ) {
 			return $deny;
 		}
-		global $wpdb;
-		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Yoast's own {prefix}yoast_indexable table has no WP API; live data is required; $table is $wpdb->prefix + a constant and every value goes through $wpdb->prepare().
-		$table = $wpdb->prefix . 'yoast_indexable';
-		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
-			return new \WP_Error( 'no_index', 'Yoast indexable table not found', array( 'status' => 501 ) );
+		$repo = $this->indexable_repository();
+		if ( ! $repo ) {
+			return new \WP_Error( 'no_index', 'Yoast indexable repository not available', array( 'status' => 501 ) );
 		}
 		// SEC-00: Yoast's dashboard SEO overview (WPSEO_Statistics) is shown to
 		// edit_posts users but scoped to their own posts without edit_others_posts.
-		$scope = '';
-		if ( ! \current_user_can( 'edit_others_posts' ) ) {
-			$scope = $wpdb->prepare( " WHERE object_type = 'post' AND author_id = %d", \get_current_user_id() );
-		}
-		$row = $wpdb->get_row(
-			"SELECT
-			  SUM(object_type='post') AS posts_indexed,
-			  SUM(is_cornerstone=1) AS cornerstone,
-			  SUM(is_robots_noindex=1) AS noindex,
-			  SUM(description IS NULL OR description='') AS missing_description,
-			  SUM(primary_focus_keyword_score < 50 AND primary_focus_keyword_score IS NOT NULL) AS low_seo_score
-			 FROM {$table}{$scope}",
-			ARRAY_A
-		);
-		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-		return $this->success_response(
-			array(
-				'posts_indexed'       => (int) ( $row['posts_indexed'] ?? 0 ),
-				'cornerstone'         => (int) ( $row['cornerstone'] ?? 0 ),
-				'noindex'             => (int) ( $row['noindex'] ?? 0 ),
-				'missing_description' => (int) ( $row['missing_description'] ?? 0 ),
-				'low_seo_score'       => (int) ( $row['low_seo_score'] ?? 0 ),
-			)
-		);
-	}
-
-	/**
-	 * Tool handler for `yoast.updateSeoMeta`.
-	 *
-	 * @param array $params Validated tool input.
-	 * @return array|\WP_Error
-	 */
-	public function execute_updateSeoMeta( $params ) {
-		$id = $this->require_post( $params );
-		if ( \is_wp_error( $id ) ) {
-			return $id;
-		}
-		$deny = $this->require_edit_post( $id );
-		if ( $deny ) {
-			return $deny;
-		}
-		$updated = array();
-		if ( isset( $params['title'] ) ) {
-			\update_post_meta( $id, '_yoast_wpseo_title', \sanitize_text_field( $params['title'] ) );
-			$updated[] = 'title';
-		}
-		if ( isset( $params['metadesc'] ) ) {
-			\update_post_meta( $id, '_yoast_wpseo_metadesc', \sanitize_textarea_field( $params['metadesc'] ) );
-			$updated[] = 'metadesc';
-		}
-		if ( ! $updated ) {
-			return new \WP_Error( 'missing_parameter', 'Provide title and/or metadesc', array( 'status' => 400 ) );
-		}
-		return $this->success_response(
-			array(
-				'post_id' => $id,
-				'updated' => $updated,
-			)
-		);
-	}
-
-	/**
-	 * Tool handler for `yoast.setFocusKeyword`.
-	 *
-	 * @param array $params Validated tool input.
-	 * @return array|\WP_Error
-	 */
-	public function execute_setFocusKeyword( $params ) {
-		$id = $this->require_post( $params );
-		if ( \is_wp_error( $id ) ) {
-			return $id;
-		}
-		$deny = $this->require_edit_post( $id );
-		if ( $deny ) {
-			return $deny;
-		}
-		\update_post_meta( $id, '_yoast_wpseo_focuskw', \sanitize_text_field( $params['keyword'] ?? '' ) );
-		return $this->success_response(
-			array(
-				'post_id'       => $id,
-				'focus_keyword' => $params['keyword'] ?? '',
-			)
-		);
-	}
-
-	/**
-	 * Tool handler for `yoast.setCanonical`.
-	 *
-	 * @param array $params Validated tool input.
-	 * @return array|\WP_Error
-	 */
-	public function execute_setCanonical( $params ) {
-		$id = $this->require_post( $params );
-		if ( \is_wp_error( $id ) ) {
-			return $id;
-		}
-		$deny = $this->require_edit_post( $id );
-		if ( $deny ) {
-			return $deny;
-		}
-		$deny = $this->require_advanced_meta();
-		if ( $deny ) {
-			return $deny;
-		}
-		\update_post_meta( $id, '_yoast_wpseo_canonical', \esc_url_raw( $params['canonical'] ?? '' ) );
-		return $this->success_response(
-			array(
-				'post_id'   => $id,
-				'canonical' => $params['canonical'] ?? '',
-			)
-		);
-	}
-
-	/**
-	 * Tool handler for `yoast.setRobotsSettings`.
-	 *
-	 * @param array $params Validated tool input.
-	 * @return array|\WP_Error
-	 */
-	public function execute_setRobotsSettings( $params ) {
-		$id = $this->require_post( $params );
-		if ( \is_wp_error( $id ) ) {
-			return $id;
-		}
-		$deny = $this->require_edit_post( $id );
-		if ( $deny ) {
-			return $deny;
-		}
-		$deny = $this->require_advanced_meta();
-		if ( $deny ) {
-			return $deny;
-		}
-		if ( isset( $params['noindex'] ) ) {
-			\update_post_meta( $id, '_yoast_wpseo_meta-robots-noindex', ! empty( $params['noindex'] ) ? '1' : '2' );
-		}
-		if ( isset( $params['nofollow'] ) ) {
-			\update_post_meta( $id, '_yoast_wpseo_meta-robots-nofollow', ! empty( $params['nofollow'] ) ? '1' : '0' );
-		}
-		return $this->success_response(
-			array(
-				'post_id'  => $id,
-				'noindex'  => ! empty( $params['noindex'] ),
-				'nofollow' => ! empty( $params['nofollow'] ),
-			)
-		);
-	}
-
-	/**
-	 * Tool handler for `yoast.setCornerstone`.
-	 *
-	 * @param array $params Validated tool input.
-	 * @return array|\WP_Error
-	 */
-	public function execute_setCornerstone( $params ) {
-		$id = $this->require_post( $params );
-		if ( \is_wp_error( $id ) ) {
-			return $id;
-		}
-		$deny = $this->require_edit_post( $id );
-		if ( $deny ) {
-			return $deny;
-		}
-		\update_post_meta( $id, '_yoast_wpseo_is_cornerstone', ! empty( $params['cornerstone'] ) ? '1' : '' );
-		return $this->success_response(
-			array(
-				'post_id'     => $id,
-				'cornerstone' => ! empty( $params['cornerstone'] ),
-			)
-		);
-	}
-
-	/**
-	 * Tool handler for `yoast.setSocialMeta`.
-	 *
-	 * @param array $params Validated tool input.
-	 * @return array|\WP_Error
-	 */
-	public function execute_setSocialMeta( $params ) {
-		$id = $this->require_post( $params );
-		if ( \is_wp_error( $id ) ) {
-			return $id;
-		}
-		$deny = $this->require_edit_post( $id );
-		if ( $deny ) {
-			return $deny;
-		}
-		$map     = array(
-			'og_title'            => '_yoast_wpseo_opengraph-title',
-			'og_description'      => '_yoast_wpseo_opengraph-description',
-			'twitter_title'       => '_yoast_wpseo_twitter-title',
-			'twitter_description' => '_yoast_wpseo_twitter-description',
-		);
-		$updated = array();
-		foreach ( $map as $param => $meta ) {
-			if ( isset( $params[ $param ] ) ) {
-				\update_post_meta( $id, $meta, \sanitize_text_field( $params[ $param ] ) );
-				$updated[] = $param;
+		$own_only = ! \current_user_can( 'edit_others_posts' );
+		$base     = function () use ( $repo, $own_only ) {
+			$q = $repo->query();
+			if ( $own_only ) {
+				$q->where( 'object_type', 'post' )->where( 'author_id', \get_current_user_id() );
 			}
-		}
-		if ( ! $updated ) {
-			return new \WP_Error( 'missing_parameter', 'Provide at least one social field', array( 'status' => 400 ) );
-		}
+			return $q;
+		};
 		return $this->success_response(
 			array(
-				'post_id' => $id,
-				'updated' => $updated,
+				'posts_indexed'       => (int) $base()->where( 'object_type', 'post' )->count(),
+				'cornerstone'         => (int) $base()->where( 'is_cornerstone', 1 )->count(),
+				'noindex'             => (int) $base()->where( 'is_robots_noindex', 1 )->count(),
+				'missing_description' => (int) $base()->where_raw( '( description IS NULL OR description = \'\' )' )->count(),
+				'low_seo_score'       => (int) $base()->where_not_null( 'primary_focus_keyword_score' )->where_lt( 'primary_focus_keyword_score', 50 )->count(),
 			)
 		);
 	}
